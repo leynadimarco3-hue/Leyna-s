@@ -32,7 +32,7 @@ def parse_names(upload):
         df = pd.read_excel(io.BytesIO(data))
     if df.empty:
         return []
-    preferred = next((c for c in df.columns if str(c).strip().lower() in ('name','player','player name','candidate')), df.columns[0])
+    preferred = next((c for c in df.columns if str(c).strip().lower() in ('name', 'player', 'player name', 'candidate')), df.columns[0])
     names = [str(x).strip() for x in df[preferred].dropna().tolist()]
     names = [n for n in names if n and n.lower() != 'nan']
     if len(names) != len(set(n.casefold() for n in names)):
@@ -56,7 +56,7 @@ if page == 'admin':
         st.rerun()
     st.subheader('Upload candidate list')
     st.caption('Excel (.xlsx) or CSV. Use a Name column, or put names in the first column. Replacing names clears previous votes.')
-    uploaded = st.file_uploader('Choose a spreadsheet', type=['csv','xlsx'])
+    uploaded = st.file_uploader('Choose a spreadsheet', type=['csv', 'xlsx'])
     if uploaded:
         try:
             names = parse_names(uploaded)
@@ -82,9 +82,9 @@ if page == 'admin':
             item['First-place votes'] += int(v['rank'] == 1)
             item['Total rankings'] += 1
     if counts:
-        results = pd.DataFrame(counts.values()).sort_values(['Points','First-place votes','Name'], ascending=[False,False,True]).reset_index(drop=True)
+        results = pd.DataFrame(counts.values()).sort_values(['Points', 'First-place votes', 'Name'], ascending=[False, False, True]).reset_index(drop=True)
         results.insert(0, 'Position', range(1, len(results) + 1))
-        st.dataframe(results, hide_index=True, use_container_width=True)
+        st.dataframe(results, hide_index=True, width='stretch')
         st.download_button('Download results CSV', results.to_csv(index=False).encode(), 'all_state_results.csv', 'text/csv')
         st.caption('Scoring: with N players, 1st gets N points, 2nd N−1, and last gets 1. Ties in points are ordered by first-place votes; remaining ties are alphabetical for display only.')
     st.info('Share the main app URL without ?view=admin with voters. Keep your admin password secret.')
