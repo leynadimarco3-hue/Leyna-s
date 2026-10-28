@@ -94,34 +94,3 @@ else:
         st.info('Voting is currently closed.')
         st.stop()
     candidates = get_names()
-    if not candidates:
-        st.info('The organizer has not uploaded the player list yet.')
-        st.stop()
-    n = len(candidates)
-    st.write(f'Enter a number from **1 to {n}** beside each player. **1 = highest ranking**. Every number must be used exactly once.')
-    st.caption('Duplicate or missing ranks will prevent submission. Your vote is anonymous.')
-    ranks = {}
-    with st.form('ballot'):
-        for c in candidates:
-            ranks[c['id']] = st.number_input(
-                c['name'], min_value=0, max_value=n, value=0, step=1,
-                key=f"rank_{c['id']}", help=f'Enter 1 through {n}; 0 means not yet ranked.'
-            )
-        submitted = st.form_submit_button('Submit anonymous ballot', type='primary')
-    if submitted:
-        selected = list(ranks.values())
-        duplicates = sorted({rank for rank in selected if rank != 0 and selected.count(rank) > 1})
-        if duplicates:
-            st.error('Duplicate rankings are not allowed. These ranks were used more than once: ' + ', '.join(map(str, duplicates)) + '. Please give each player a different number.')
-        elif 0 in selected or set(selected) != set(range(1, n + 1)):
-            st.error(f'Please rank every player using each number from 1 through {n} exactly once. 0 means unranked.')
-        else:
-            try:
-                db.rpc('submit_ballot', {
-                    'p_candidate_ids': [c['id'] for c in candidates],
-                    'p_ranks': [int(ranks[c['id']]) for c in candidates]
-                }).execute()
-                st.success('Your anonymous ballot was submitted. Thank you!')
-                st.balloons()
-            except Exception:
-                st.error('Your ballot could not be submitted. Voting may have closed or the player list changed. Refresh and try again.')
