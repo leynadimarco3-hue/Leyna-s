@@ -94,3 +94,77 @@ if page == "admin":
                 item["Points"] += n - v["rank"] + 1
                 item["First-place votes"] += int(v["rank"] == 1)
                 item["Total rankings"] += 1
+        if counts:
+            results = pd.DataFrame(counts.values()).sort_values(["Points", "First-place votes", "Name"], ascending=[False, False, True]).reset_index(drop=True)
+            results.insert(0, "Position", range(1, len(results) + 1))
+            st.dataframe(results, hide_index=True, width="stretch")
+            st.download_button("Download results CSV", results.to_csv(index=False).encode(), "all_state_results.csv", "text/csv")
+            st.caption("Scoring: first receives N points, second N−1, and last receives 1.")
+    except Exception as e:
+        st.error(f"Could not load results: {e}")
+    st.info("Share the main app URL without ?view=admin. Keep your admin password secret.")
+
+else:
+    # This branch must always render the voting interface when players are loaded.
+    try:
+        settings = db.table("poll_settings").select("is_open").eq("id", 1).single().execute().data
+        candidates = get_names()
+    except Exception as e:
+        st.error(f"Could not load voting data: {e}")
+        st.stop()
+
+    if not settings or not settings.get("is_open", False):
+        st.info("Voting is currently closed.")
+        st.stop()
+    if not candidates:
+        st.info("The organizer has not uploaded a player list yet.")
+        st.stop()
+
+    n = len(candidates)
+    st.subheader("Rank the players")
+    st.write(f"Rank all **{n} players**. Type **1** for your top player, **2** for your second choice, and so on through **{n}**. Each rank can be used only once.")
+    st.caption("Anonymous ballot. All ranks are required.")
+
+    # Text inputs have no increment/decrement buttons, unlike number_input.
+    # Widgets are outside a form so duplicate warnings update immediately.
+    ids = tuple(c["id"] for c in candidates)
+    if st.session_state.get("ballot_candidate_ids") != ids:
+        for k in list(st.session_state):
+            if k.startswith("rank_entry_"):
+                del st.session_state[k]
+        st.session_state["ballot_candidate_ids"] = ids
+
+    entries = {}
+    for candidate in candidates:
+        entries[candidate["id"]] = st.text_input(
+            candidate["name"],
+            key=f"rank_entry_{candidate['id']}",
+            placeholder=f"Enter 1–{n}",
+        ).strip()
+
+    provided = [x for x in entries.values() if x]
+    invalid = [x for x in provided if not x.isdecimal() or not (1 <= int(x) <= n)]
+    numeric = [int(x) for x in provided if x.isdecimal() and 1 <= int(x) <= n]
+    duplicate_ranks = sorted(x for x, count in Counter(numeric).items() if count > 1)
+    missing = n - len(provided)
+
+    if invalid:
+        st.error(f"Ranks must be whole numbers between 1 and {n}.")
+    if duplicate_ranks:
+        st.error("Duplicate rank(s): " + ", ".join(map(str, duplicate_ranks)) + ". Give each player a different number.")
+    if missing:
+        st.info(f"{missing} player(s) still need a ranking.")
+    valid = len(provided) == n and not invalid and not duplicate_ranks and set(numeric) == set(range(1, n + 1))
+    if valid:
+        st.success("All rankings are valid. Ready to submit.")
+
+    if st.button("Submit anonymous ballot", type="primary", disabled=not valid):
+        try:
+            db.rpc("submit_ballot", {
+                "p_candidate_ids": [c["id"] for c in candidates],
+                "p_ranks": [int(entries[c["id"]]) for c in candidates],
+            }).execute()
+            st.success("Your anonymous ballot was submitted. Thank you!")
+            st.balloons()
+        except Exception:
+            st.error("Ballot submission failed. Voting may have closed or the player list may have changed. Refresh and try again.")
